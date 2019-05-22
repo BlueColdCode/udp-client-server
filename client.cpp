@@ -130,7 +130,10 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    MessageClient mc(argv[1], stoi(argv[2]), stoi(argv[3]));
+    unsigned int cid = stoi(argv[3]);
+    srand(cid);
+    
+    MessageClient mc(argv[1], stoi(argv[2]), cid);
     mc.Run();
     return 0;
 }
