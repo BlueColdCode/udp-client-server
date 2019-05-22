@@ -29,8 +29,11 @@ using namespace std;
 #include "server.test"
 
 const int MAX_MESSAGE_LEN = 1024;
+
 // Total threads 12.
 const int thread_count = 10;
+
+// Single writer in Run(). All others are read.
 int job_done = false;
 
 MessageServer::MessageServer(int port)
@@ -114,7 +117,7 @@ void MessageServer::FinishClient(int cid)
     cout << "Client " << cid << " finished messaging." << endl;
     DataStore clientDataStore;
     do {
-        lock_guard<mutex> lock(messageLock_);
+        lock_guard<mutex> lock(storeLock_);
         clientDataStore = clients_[cid];
         clients_.erase(cid);
     } while (0);
