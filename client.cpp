@@ -58,14 +58,14 @@ int MessageClient::OpenPort()
         return -2;
     }
    
-    cout << "Client port opened to messages." << endl;
+    // cout << "Client port opened to messages." << endl;
     return 0;
 }
 
 void MessageClient::ClosePort()
 {
     if (sockfd_ > 0) {
-        cout << "Closing port" << endl;
+        cout << "." << flush;
         close(sockfd_);
     }
 }
@@ -73,8 +73,9 @@ void MessageClient::ClosePort()
 int MessageClient::GetFileName(string& filename)
 {
     stringstream ss;
-    ss << "./client-data/messages-" << clientID_ << ".txt";
+    ss << "./client-data/messages-" << (clientID_ % 10) << ".txt";
     filename = ss.str();
+    // cout << "Opening file " << filename << endl;
     return 0;
 }
 
@@ -95,7 +96,13 @@ void MessageClient::Run()
     // Create predefined client filename.
     string filename;
     GetFileName(filename);
-    ifstream ifs(filename.c_str(), ifstream::in);
+    ifstream ifs;
+    try {
+        ifs.open (filename.c_str(), ifstream::in);
+    } catch (ifstream::failure e) {
+        cerr << "Exception opening/reading/closing file\n" << flush;
+        exit(0);
+    }
 
     // Message buffer for each line of the file.
     string buffer;
@@ -104,12 +111,12 @@ void MessageClient::Run()
     pref << clientID_ << ":";
     while (getline(ifs, buffer)) {
         buffer.insert(0, pref.str());
-        cout << "Sending: " << buffer << ">" << endl;
+        // cout << "Sending: " << buffer << ">" << endl;
         sendto(sockfd_, buffer.c_str(), buffer.length(),
             MSG_CONFIRM, (const struct sockaddr *) &servaddr,
             sizeof(servaddr));
         // Random delay before sending the next.
-        usleep((rand() % 1000000) + 1);
+        usleep((rand() % 1000) + 1);
     }
     // Last message only includes the prefix.
     buffer = pref.str();

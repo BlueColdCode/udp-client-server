@@ -8,6 +8,7 @@
 #include <mutex>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -29,12 +30,13 @@ using namespace std;
 #include "server.test"
 
 const int MAX_MESSAGE_LEN = 1024;
+int messageCount = 0;
 
-// Total threads 12.
-const int thread_count = 10;
+// Total threads 6.
+const int thread_count = 3;
 
 // Single writer in Run(). All others are read.
-int job_done = false;
+bool job_done = false;
 
 MessageServer::MessageServer(int port)
 {
@@ -107,18 +109,19 @@ int MessageServer::GetMessage(int& cid, string& buffer)
 
 void MessageServer::AddClientMessage(int clientID, string& message)
 {
-    std::lock_guard<std::mutex> lock(storeLock_);
-    clients_[clientID].insert(pair<int, string>(message.length(), message));
+    lock_guard<mutex> lock(storeLock_);
+    clients_[clientID].insert(pair<int, string>(message.length(),
+            move(message)));
 }
 
 void MessageServer::FinishClient(int cid)
 {
     // print DataStore messages to file.
-    cout << "Client " << cid << " finished messaging." << endl;
+    // cout << "Client " << cid << " finished messaging." << endl;
     DataStore clientDataStore;
     do {
         lock_guard<mutex> lock(storeLock_);
-        clientDataStore = clients_[cid];
+        clientDataStore = move(clients_[cid]);
         clients_.erase(cid);
     } while (0);
     
@@ -152,7 +155,7 @@ void MessageServer::ProcessMessage()
                 continue;
             }
             // Copy out the head-of-line.
-            buffer = messageQ_.front();
+            buffer = move(messageQ_.front());
             messageQ_.pop();
         } else {
             usleep(5);
@@ -162,10 +165,8 @@ void MessageServer::ProcessMessage()
         
         // Message parsing and storing.
         int cid = stoi(buffer.substr(0, buffer.find_first_of(':')));
-        cout << "Received ("
-             << buffer.length() << ") from "
-             << cid << " --|"
-             << buffer << "|--" << endl;
+        // cout << "Received (" << buffer.length() << ") from "
+        //     << cid << " --|" << buffer << "|--" << endl;
         buffer.erase(0, buffer.find_first_of(':') + 1);
 
         if (buffer.length() == 0) {
@@ -176,27 +177,42 @@ void MessageServer::ProcessMessage()
     }
 }
 
+void MessageServer::Speedometer()
+{
+    chrono::seconds sec(10);
+    int lastCount = messageCount;
+    
+    while (!job_done) {
+        this_thread::sleep_for(sec);
+        cout << "Message processing rate: "
+             << (messageCount - lastCount) / 10.0 << " msg/sec" << endl;
+        lastCount = messageCount;
+    }
+}
+
 void MessageServer::Run()
 {
     string buffer;
     int cid;
     while(GetMessage(cid, buffer) != -1) {
+        messageCount++;
         // Critical section.
         lock_guard<mutex> lock(messageLock_);
-        messageQ_.push(buffer);
-        buffer = "";
+        messageQ_.push(move(buffer));
     }
     cout << "All messages done." << endl;
 
     // Wait until all messages are processed.
-    do {
-        lock_guard<mutex> lock(messageLock_);
-        if (messageQ_.empty()) {
-            break;
-        }
+    while(1) {
         usleep(1000);
-    } while (1);
-    job_done = true;
+        if (!job_done) {
+            lock_guard<mutex> lock(messageLock_);
+            if (messageQ_.empty()) {
+                job_done = true;
+                break;
+            }
+        }
+    }
 }
 
 int main(int argc, char* argv[])
@@ -207,7 +223,7 @@ int main(int argc, char* argv[])
     }
 
     MessageServer ms(stoi(argv[1]));
-    thread t[thread_count+1];
+    thread t[thread_count+2];
     
     // UDP message parser/storer/saver.
     for (int i = 0; i < thread_count; i++) {
@@ -215,8 +231,9 @@ int main(int argc, char* argv[])
     }
     // UDP message receiver.
     t[thread_count] = thread(&MessageServer::Run, &ms);
+    t[thread_count+1] = thread(&MessageServer::Speedometer, &ms);
 
-    for (int i = 0; i < thread_count+1; i++) {
+    for (int i = 0; i < thread_count+2; i++) {
         t[i].join();
     }
     return 0;
