@@ -1,4 +1,4 @@
-CPPFLAGS=-g -pthread -std=c++0x -DTEST=1 -I./
+CPPFLAGS=-g -pthread -std=c++0x -DTEST=0 -I./
 
 all: server client
 
