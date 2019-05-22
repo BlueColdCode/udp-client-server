@@ -1,0 +1,43 @@
+#ifndef TEST
+#define TEST 0
+#endif
+
+#if TEST
+static int g_index = 0;
+char const* dataStream[] = {
+    "3:This is line 1",
+    "2:This is line 22",
+    "1:This is line 333",
+    "1:This is line 44444",
+    "3:This is line 1313131313131",
+    "2:This is line 555555",
+    "1:This is line 121212121212",
+    "3:This is line 6666666",
+    "1:This is line 7777777",
+    "3:This is line 88888888",
+    "1:This is line 999999999",
+    "2:This is line 1010101010",
+    "1:This is line 11111111111",
+    "3:This is line 151515151515155",
+    "2:This is line 14141414141414",
+    "3:This is line 1",
+    "2:This is line 22",
+    "1:This is line 333",
+    "2:This is line 44444",
+    "1:This is line 1313131313131",
+    "1:This is line 555555",
+    "3:This is line 121212121212",
+    "2:This is line 6666666",
+    "1:This is line 7777777",
+    "3:This is line 88888888",
+    "3:",
+    "2:This is line 999999999",
+    "1:This is line 1010101010",
+    "2:This is line 11111111111",
+    "1:This is line 151515151515155",
+    "1:",
+    "2:This is line 14141414141414",
+    "2:",
+    0
+};
+#endif
