@@ -108,6 +108,8 @@ void MessageClient::Run()
         sendto(sockfd_, buffer.c_str(), buffer.length(),
             MSG_CONFIRM, (const struct sockaddr *) &servaddr,
             sizeof(servaddr));
+        // Random delay before sending the next.
+        usleep((rand() % 1000000) + 1);
     }
     // Last message only includes the prefix.
     buffer = pref.str();
