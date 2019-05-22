@@ -9,7 +9,7 @@ all the worker thread, and wait them to terminate. In test mode, the
 threads will terminate. In UDP server mode, the server and its threads
 never terminate until forced by `ctl-c`.
 
-The worker threads totaled 11, one of which is the reader of UDP
+The worker threads totaled 5, one of which is the reader of UDP
 socket. All others are message processer.
 
 ## Usage:
@@ -27,7 +27,7 @@ Afterward, run any number of clients:
 ./client localhost 9090 6
 ```
 which will read from a file `client-data/messages-6.txt`, and send line
-by line to the server at localhost:9090.
+by line to the server at `localhost:9090`.
 
 ## System testing:
 
@@ -48,7 +48,7 @@ will terminate quickly at each run once finish sending the file.
 
 ## Unit test:
 
-The server can be unit tested if compiled with -DTEST=1. In that case,
+The server can be unit tested if compiled with `-DTEST=1`. In that case,
 the server can ran using the internal test cases, and produce the same
 results in `server-data/`.
 
