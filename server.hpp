@@ -16,6 +16,8 @@ public:
     void Run();
     // Thread to process UDP message from a FIFO queue.
     void ProcessMessage();
+    // Thread to print message proc-rate every 10 seconds.
+    void Speedometer();
 
 private:
     // Opens socket fd for receiving packets.
