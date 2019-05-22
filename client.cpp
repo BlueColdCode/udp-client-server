@@ -98,12 +98,13 @@ void MessageClient::Run()
     ifstream ifs(filename.c_str(), ifstream::in);
 
     // Message buffer for each line of the file.
-    int n, len;
     string buffer;
+    int n, len;
     stringstream pref;
     pref << clientID_ << ":";
     while (getline(ifs, buffer)) {
         buffer.insert(0, pref.str());
+        cout << "Sending: " << buffer << ">" << endl;
         sendto(sockfd_, buffer.c_str(), buffer.length(),
             MSG_CONFIRM, (const struct sockaddr *) &servaddr,
             sizeof(servaddr));
@@ -121,9 +122,13 @@ void MessageClient::Run()
 int main(int argc, char* argv[])
 {
     if (argc != 4) {
-        cout << "Usage: " << argv[0] << " <server name/ip> <server port> <client ID>" << endl;
+        cout << "Usage: " << argv[0]
+             << " <server name/ip> <server port> <client ID>"
+             << endl;
         return -1;
     }
-   
+
+    MessageClient mc(argv[1], stoi(argv[2]), stoi(argv[3]));
+    mc.Run();
     return 0;
 }

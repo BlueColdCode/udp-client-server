@@ -72,32 +72,36 @@ void MessageServer::ClosePort()
 
 int MessageServer::GetMessage(int sockfd, int& cid, string& buffer)
 {
+    int n;
+
 #if TEST
     if (dataStream[g_index]) {
         buffer = dataStream[g_index++];
-        cid = stoi(buffer.substr(0, buffer.find_first_of(':')));
-        int len = buffer.length() - buffer.find_first_of(':') - 1;
-
-        cout << "Read (" << buffer.length() << "): " << buffer << endl;
-        cout << "CID: " << cid << " Message length: " << len << endl;
-        return len;
     } else {
         return -1;
-    }
-    
-#else
+    }    
 
-    vector<char> buff(MAX_MESSAGE_LEN);
-    struct sockaddr_in cliaddr;
-    int n;
-    socklen_t len;
-    
-    n = recvfrom(sockfd_, &buff[0], buff.size(), MSG_WAITALL,
-        (struct sockaddr *)&cliaddr, &len); 
-    buff[n] = '\0';
-    buffer.append(buff.begin(), buff.end()); // copy over.
-    return n;
+#else
+    {
+        vector<char> buff(MAX_MESSAGE_LEN);
+        struct sockaddr_in cliaddr;
+        socklen_t len;
+        
+        n = recvfrom(sockfd_, &buff[0], buff.size(), MSG_WAITALL,
+            (struct sockaddr *)&cliaddr, &len); 
+        buff[n] = '\0';
+        buffer.append(&buff[0]); // copy over.
+    }
 #endif
+
+    cout << "Received: " << buffer << "<" << endl;
+    cid = stoi(buffer.substr(0, buffer.find_first_of(':')));
+    n = buffer.length() - buffer.find_first_of(':') - 1;
+
+    cout << "Read (" << buffer.length() << "): " << buffer << endl;
+    cout << "CID: " << cid << " Message length: " << n << endl;
+    buffer.erase(0, buffer.find_first_of(':') + 1);
+    return n;
 }
 
 void MessageServer::AddClientMessage(int clientID, string& message)
