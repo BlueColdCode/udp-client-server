@@ -11,7 +11,11 @@ class MessageServer {
 public:
     MessageServer(int port);
     ~MessageServer();
+
+    // Thread to get UDP packets from socket.
     void Run();
+    // Thread to process UDP message from a FIFO queue.
+    void ProcessMessage();
 
 private:
     // Opens socket fd for receiving packets.
@@ -20,8 +24,8 @@ private:
     void ClosePort();
 
     // Retrieves one message from the socket, and save it in
-    // buffer. The clientID is returned as a result.
-    int GetMessage(int sockfd, int& cid, string& buffer);
+    // buffer. The buffer length is returned as a result.
+    int GetMessage(int& cid, string& buffer);
     
     // Add a message into the sorted DataStore for the client. This
     // handles both initial message insertion and additional message
@@ -31,9 +35,14 @@ private:
     // Client has indicated the end of message stream, so wrap up and
     // output the messages to a file.
     void FinishClient(int cid);
+
+    // Message FIFO queue
+    queue<string> messageQ_;
+    mutex messageLock_;
     
     // Local database.
     Clients clients_;
+    mutex storeLock_;
     int sockfd_;
 };
 

@@ -3,6 +3,9 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <queue>
+#include <thread>
+#include <mutex>
 #include <fstream>
 #include <sstream>
 
@@ -26,6 +29,9 @@ using namespace std;
 #include "server.test"
 
 const int MAX_MESSAGE_LEN = 1024;
+// Total threads 12.
+const int thread_count = 10;
+int job_done = false;
 
 MessageServer::MessageServer(int port)
 {
@@ -70,7 +76,8 @@ void MessageServer::ClosePort()
     }
 }
 
-int MessageServer::GetMessage(int sockfd, int& cid, string& buffer)
+// Return -1 on simulation end. Otherwise always return 1 for server.
+int MessageServer::GetMessage(int& cid, string& buffer)
 {
     int n;
 
@@ -79,8 +86,7 @@ int MessageServer::GetMessage(int sockfd, int& cid, string& buffer)
         buffer = dataStream[g_index++];
     } else {
         return -1;
-    }    
-
+    }
 #else
     {
         vector<char> buff(MAX_MESSAGE_LEN);
@@ -93,33 +99,32 @@ int MessageServer::GetMessage(int sockfd, int& cid, string& buffer)
         buffer.append(&buff[0]); // copy over.
     }
 #endif
-
-    cout << "Received: " << buffer << "<" << endl;
-    cid = stoi(buffer.substr(0, buffer.find_first_of(':')));
-    n = buffer.length() - buffer.find_first_of(':') - 1;
-
-    cout << "Read (" << buffer.length() << "): " << buffer << endl;
-    cout << "CID: " << cid << " Message length: " << n << endl;
-    buffer.erase(0, buffer.find_first_of(':') + 1);
-    return n;
+    return 1;
 }
 
 void MessageServer::AddClientMessage(int clientID, string& message)
 {
+    std::lock_guard<std::mutex> lock(storeLock_);
     clients_[clientID].insert(pair<int, string>(message.length(), message));
 }
 
 void MessageServer::FinishClient(int cid)
 {
-    // XXX print DataStore messages to file.
+    // print DataStore messages to file.
     cout << "Client " << cid << " finished messaging." << endl;
-
+    DataStore clientDataStore;
+    do {
+        lock_guard<mutex> lock(messageLock_);
+        clientDataStore = clients_[cid];
+        clients_.erase(cid);
+    } while (0);
+    
     stringstream ss;
     ss << "./server-data/messages-" << cid << ".txt";
     ofstream ofs (ss.str(), ofstream::out);
-    int count = clients_[cid].size() * 9 / 10;
-    for (DataStoreIter it = clients_[cid].begin();
-         it != clients_[cid].end(); it++) {
+    int count = clientDataStore.size() * 9 / 10;
+    for (DataStoreIter it = clientDataStore.begin();
+         it != clientDataStore.end(); it++) {
         if (count-- <= 0) {
             break;
         }
@@ -128,21 +133,67 @@ void MessageServer::FinishClient(int cid)
     ofs.close();
 }
 
-void MessageServer::Run()
+// thread function.
+void MessageServer::ProcessMessage()
 {
-    string buffer;
-    int cid, len;
-    for (len = GetMessage(sockfd_, cid, buffer);
-         len != -1;
-         len = GetMessage(sockfd_, cid, buffer)) {
-        if (len == 0) {
+    bool work_to_do = true;
+    
+    while(!job_done) {
+        string buffer;
+
+        if (work_to_do) {
+            // Critical section.
+            lock_guard<mutex> lock(messageLock_);
+            if (messageQ_.empty()) {
+                work_to_do = false;
+                continue;
+            }
+            // Copy out the head-of-line.
+            buffer = messageQ_.front();
+            messageQ_.pop();
+        } else {
+            usleep(5);
+            work_to_do = true; // try again.
+            continue;
+        }
+        
+        // Message parsing and storing.
+        int cid = stoi(buffer.substr(0, buffer.find_first_of(':')));
+        cout << "Received ("
+             << buffer.length() << ") from "
+             << cid << " --|"
+             << buffer << "|--" << endl;
+        buffer.erase(0, buffer.find_first_of(':') + 1);
+
+        if (buffer.length() == 0) {
             FinishClient(cid);
         } else {
             AddClientMessage(cid, buffer);
         }
+    }
+}
+
+void MessageServer::Run()
+{
+    string buffer;
+    int cid;
+    while(GetMessage(cid, buffer) != -1) {
+        // Critical section.
+        lock_guard<mutex> lock(messageLock_);
+        messageQ_.push(buffer);
         buffer = "";
     }
     cout << "All messages done." << endl;
+
+    // Wait until all messages are processed.
+    do {
+        lock_guard<mutex> lock(messageLock_);
+        if (messageQ_.empty()) {
+            break;
+        }
+        usleep(1000);
+    } while (1);
+    job_done = true;
 }
 
 int main(int argc, char* argv[])
@@ -151,8 +202,19 @@ int main(int argc, char* argv[])
         cout << "Usage: " << argv[0] << " <port>" << endl;
         return -1;
     }
-    
+
     MessageServer ms(stoi(argv[1]));
-    ms.Run();
+    thread t[thread_count+1];
+    
+    // UDP message parser/storer/saver.
+    for (int i = 0; i < thread_count; i++) {
+        t[i] = thread(&MessageServer::ProcessMessage, &ms);
+    }
+    // UDP message receiver.
+    t[thread_count] = thread(&MessageServer::Run, &ms);
+
+    for (int i = 0; i < thread_count+1; i++) {
+        t[i].join();
+    }
     return 0;
 }
