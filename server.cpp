@@ -9,6 +9,7 @@
 #include <fstream>
 #include <sstream>
 #include <chrono>
+#include <condition_variable>
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -82,7 +83,7 @@ void MessageServer::ClosePort()
 }
 
 // Return -1 on simulation end. Otherwise always return 1 for server.
-int MessageServer::GetMessage(int& cid, string& buffer)
+int MessageServer::GetMessage(string& buffer)
 {
     int n;
 
@@ -142,25 +143,19 @@ void MessageServer::FinishClient(int cid)
 // thread function.
 void MessageServer::ProcessMessage()
 {
-    bool work_to_do = true;
-    
     while(!job_done) {
         string buffer;
 
-        if (work_to_do) {
-            // Critical section.
-            lock_guard<mutex> lock(messageLock_);
+        if (1) {
+            unique_lock<mutex> lock(messageLock_);
             if (messageQ_.empty()) {
-                work_to_do = false;
+                // Wait for work to arrive.
+                work_to_do_.wait(lock);
                 continue;
             }
             // Copy out the head-of-line.
             buffer = move(messageQ_.front());
             messageQ_.pop();
-        } else {
-            usleep(5);
-            work_to_do = true; // try again.
-            continue;
         }
         
         // Message parsing and storing.
@@ -177,6 +172,7 @@ void MessageServer::ProcessMessage()
     }
 }
 
+// This will be the last thread to exit.
 void MessageServer::Speedometer()
 {
     chrono::seconds sec(10);
@@ -193,12 +189,15 @@ void MessageServer::Speedometer()
 void MessageServer::Run()
 {
     string buffer;
-    int cid;
-    while(GetMessage(cid, buffer) != -1) {
+
+    while(GetMessage(buffer) != -1) {
         messageCount++;
         // Critical section.
-        lock_guard<mutex> lock(messageLock_);
-        messageQ_.push(move(buffer));
+        {
+            lock_guard<mutex> lock(messageLock_);
+            messageQ_.push(move(buffer));
+        }
+        work_to_do_.notify_all();
     }
     cout << "All messages done." << endl;
 
@@ -209,6 +208,7 @@ void MessageServer::Run()
             lock_guard<mutex> lock(messageLock_);
             if (messageQ_.empty()) {
                 job_done = true;
+                work_to_do_.notify_all();
                 break;
             }
         }
