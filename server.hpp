@@ -27,7 +27,7 @@ private:
 
     // Retrieves one message from the socket, and save it in
     // buffer. The buffer length is returned as a result.
-    int GetMessage(int& cid, string& buffer);
+    int GetMessage(string& buffer);
     
     // Add a message into the sorted DataStore for the client. This
     // handles both initial message insertion and additional message
@@ -41,6 +41,7 @@ private:
     // Message FIFO queue
     queue<string> messageQ_;
     mutex messageLock_;
+    condition_variable work_to_do_;
     
     // Local database.
     Clients clients_;
